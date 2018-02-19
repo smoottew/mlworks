@@ -1,35 +1,30 @@
 # Created 2018-02-18 16_07_54 CEST
 #
-# install.packages(c("ggplot2",
-#                    "e1071",
-#                    "caret",
-#                    "quanteda",
-#                    "irlba",
-#                    "randomForest",
-#
-#                    "data.table",
-#                    "readr",
-#                    "stringr",
-#                    "purrr"
-#                    ))
 
-packageVersion("ggplot2"     ) # [1] ‘2.2.1’
-packageVersion("e1071"       ) # [1] ‘1.6.8’
-packageVersion("caret"       ) # [1] ‘6.0.78’
-packageVersion("quanteda"    ) # [1] ‘1.0.0’
-packageVersion("irlba"       ) # [1] ‘2.3.2’
-packageVersion("randomForest") # [1] ‘4.6.12’
+# install.packages(c("data.table", "purrr", ...))
 
 packageVersion("data.table"  ) # [1] ‘1.10.4.3’
-packageVersion("readr"       ) # [1] ‘1.1.1’
-packageVersion("stringr"     ) # [1] ‘1.2.0’
 packageVersion("purrr"       ) # [1] ‘0.2.4’
+
+packageVersion("chR"         ) # [1] ‘0.1.0’
+packageVersion("koR"         ) # [1] ‘0.1’
 
 devtools::install_github("kongra/chR")
 devtools::install_github("kongra/koR")
 
-packageVersion("chR") # [1] ‘0.1.0’
-packageVersion("koR") # [1] ‘0.1’
+packageVersion("readr"       ) # [1] ‘1.1.1’
+packageVersion("stringr"     ) # [1] ‘1.2.0’
+
+packageVersion("ggplot2"     ) # [1] ‘2.2.1’
+packageVersion("doSNOW"      ) # [1] ‘1.0.16’
+
+packageVersion("quanteda"    ) # [1] ‘1.0.0’
+packageVersion("caret"       ) # [1] ‘6.0.78’
+packageVersion("pROC"        ) # [1] ‘1.10.0’
+
+packageVersion("e1071"       ) # [1] ‘1.6.8’
+packageVersion("irlba"       ) # [1] ‘2.3.2’
+packageVersion("randomForest") # [1] ‘4.6.12’
 
 # LET'S READ RAW SMS SPAM DATA
 #
@@ -119,7 +114,7 @@ ggplot(data = smsSpam, aes(x = TextLen, fill = Label)) +
 
 # CREATE DATA PARTITIONS VIA STRATIFIED RANDOM SAMPLING
 #
-library (caret)
+library(caret)
 set.seed(12345)
 
 indexes <- createDataPartition(smsSpam[, Label], times = 1, p = 0.7, list = FALSE)
@@ -169,7 +164,7 @@ View(trainTokens4)
 
 trainTokens <- trainTokens4
 
-# DFM - DOCUMENT FREQUENCY MODEL
+# DFM - DOCUMENT(S) FREQUENCY MODEL
 #
 trainDFM <- trainTokens %>% quanteda::dfm(tolower = FALSE)
 
@@ -208,11 +203,13 @@ which(trainDT[, 1412] != trainDT[, 5028])
 # Conclusion: we can safely remove the 2nd duplicated column
 set(trainDT, j = 5028L, value = NULL)
 
+model1Props <- colnames(trainDT)
+
 # ADD Label TO trainDT
 trainDT[, Label := trainData[, Label]]
 trainDT %>% moveDTcols("Label", "first")
 
-# PREPARATIONS OF THE TRAINING PROCESS
+# TRAINING PROCESS
 #
 set.seed(12345)
 cvFolds <- createMultiFolds(trainData[, Label], k = 10, times = 3)
@@ -220,14 +217,97 @@ cvCntrl <- trainControl(method = "repeatedcv", number = 10, repeats = 3, index =
 
 library(doSNOW)
 
-startTime <- Sys.time()
-cl <- makeCluster(3, type = "SOCK")
-registerDoSNOW(cl)
+catimela({
+  cl <- makeCluster(3, type = "SOCK")
+  registerDoSNOW(cl)
 
-model1 <- train(Label ~ ., data = trainDT, method = "rpart", trControl = cvCntrl, tuneLength = 7)
+  model1 <- train(Label ~ ., data = trainDT, method = "rpart", trControl = cvCntrl, tuneLength = 7)
 
-stopCluster(cl)
-totalTime <- Sys.time() - startTime
-totalTime
+  stopCluster(cl)
+
+}, msg = "model1 training")
+
 
 model1
+osize(model1)
+# 1.32 GB
+
+# SAVE AND (RE)LOAD
+#
+catimela({
+  model1      %>% saveRDS(file = "data/sms spam/2018-02-18 16_07_54 CEST sms spam model1.rds")
+  model1Props %>% saveRDS(file = "data/sms spam/2018-02-18 16_07_54 CEST sms spam model1 - props.rds")
+
+  # save(model1, trainDFMProps1, file = "data/sms spam/2018-02-18 16_07_54 CEST model1.Rdata")
+}, msg = "model1 saving")
+
+memuse()
+# rm(list = ls())
+# memuse()
+
+# load("data/sms spam/2018-02-18 16_07_54 CEST model1.Rdata")
+# memuse()
+# osize(model1)
+
+model1 <- readRDS(file = "data/sms spam/2018-02-18 16_07_54 CEST sms spam model1.rds")
+# model1Props <- readRDS(file = "data/sms spam/2018-02-18 16_07_54 CEST sms spam model1 - props.rds")
+# osize(model1)
+
+source("R/sms spam/2018-02-19 11_49_02 CEST core.R")
+
+# TEST PREDICTIONS
+#
+model1Props
+model1
+
+View(testData)
+
+testDT <- testData[, Text] %>% str2dfm(props = model1Props)
+osize(testDT)
+
+setdiff(model1Props,   colnames(testDT))
+all    (model1Props == colnames(testDT))
+# OK
+
+preds1 <- predict(model1, newdata = testDT)
+
+oks1 <- sum(testData[, Label] == preds1)
+oks1 / nrow(testData)
+# [1] 0.9443447
+
+# CREATE A SIMPLIFIED MODEL ON TRAIN DATA
+#
+model2 <- rpart::rpart(Label ~ ., data = trainDT, cp = 0.01210962)
+preds2 <- predict(model2, newdata = testDT) %>% as.data.table
+View(preds2)
+preds2[, Label := ifelse(ham > spam, "ham", "spam")]
+
+oks2 <- sum(testData[, Label] == preds2[, Label])
+oks2 / nrow(testData)
+
+# CREATE THE FINAL MODEL USING ALL DATA (TRAIN + TEST)
+#
+smsDT <- str2dfm(smsSpam[, Text])
+smsDT[, Label := smsSpam[, Label]]
+model3 <- rpart::rpart(Label ~ ., data = smsDT, cp = 0.01210962)
+
+colNames <- colnames(smsDT)
+colNames[duplicated(colNames)]
+# [1] "s.i.m"
+
+which(colNames == "s.i.m")
+# [1] 1773 6122
+
+which(smsDT[, 1773] != smsDT[, 6122])
+# [1]  531 4387 5027 5527
+# Conclusion: we can safely remove the 2nd duplicated column
+set(smsDT, j = 6122L, value = NULL)
+
+model3 <- rpart::rpart(Label ~ ., data = smsDT, cp = 0.01210962)
+osize(model3)
+# 193 MB
+
+model3 %>%
+  saveRDS(file = "cloud data/sms spam/2018-02-18 16_07_54 CEST model3.rds")
+smsDT %>% colnames %>% setdiff("Label") %>%
+  saveRDS(file = "cloud data/sms spam/2018-02-18 16_07_54 CEST props3.rds")
