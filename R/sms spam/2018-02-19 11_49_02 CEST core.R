@@ -20,13 +20,13 @@ norm2props <- function(dfm, props) chDT({
   if (is.null(props)) dfm
   else {
     colNames <- colnames(dfm)
-    # 1. All not in props must be removed
-    props2rm <- setdiff(colNames, props)
-    for (p in props2rm) set(dfm, j = p, value = NULL)
-
-    # 2. All missing must be added with 0s
+    # 1. All missing must be added with 0s
     props2Add <- setdiff(props, colNames)
     for (p in props2Add) dfm[, (p) := 0]
+
+    # 2. All not in props must be removed
+    props2rm <- setdiff(colNames, props)
+    for (p in props2rm) set(dfm, j = p, value = NULL)
 
     setcolorder(dfm, props)
     dfm
@@ -56,6 +56,12 @@ str2dfm <- function(s, props = NULL) {
     norm2props(props)
 }
 
-smsHamSpam <- function(m, s) {
+smsHamSpamDT <- function(s, model, props) chDT({
+  chStrings(s)
+  dfm  <- str2dfm(s, props = props)
+  pred <- predict(model, newdata = dfm) %>% as.data.table
+  pred[, Label := ifelse(ham > spam, "ham", "spam")]
+  pred
+})
 
-}
+"sample is" %>% smsHamSpamDT(model, props)
