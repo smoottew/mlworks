@@ -64,4 +64,4 @@ smsHamSpamDT <- function(s, model, props) chDT({
   pred
 })
 
-"sample is" %>% smsHamSpamDT(model, props)
+# preds1 <- smsSpam[, v1] %>% smsHamSpamDT(model, props)

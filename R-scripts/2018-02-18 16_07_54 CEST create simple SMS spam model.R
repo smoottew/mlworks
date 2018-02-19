@@ -285,6 +285,14 @@ preds2[, Label := ifelse(ham > spam, "ham", "spam")]
 oks2 <- sum(testData[, Label] == preds2[, Label])
 oks2 / nrow(testData)
 
+preds2  [, Label] %>% table
+testData[, Label] %>% table
+
+preds2  [, Label] %>% table %>% prop.table
+testData[, Label] %>% table %>% prop.table
+
+testData[Label != preds2[, Label]] %>% View
+
 # CREATE THE FINAL MODEL USING ALL DATA (TRAIN + TEST)
 #
 smsDT <- str2dfm(smsSpam[, Text])
@@ -307,7 +315,22 @@ model3 <- rpart::rpart(Label ~ ., data = smsDT, cp = 0.01210962)
 osize(model3)
 # 193 MB
 
+preds3 <- predict(model3, newdata = smsDT) %>% as.data.table
+View(preds3)
+preds3[, Label := ifelse(ham > spam, "ham", "spam")]
+
+oks3 <- sum(smsSpam[, Label] == preds3[, Label])
+oks3 / nrow(smsSpam)
+
+preds3 [, Label] %>% table
+smsSpam[, Label] %>% table
+
+preds3 [, Label] %>% table %>% prop.table
+smsSpam[, Label] %>% table %>% prop.table
+
 model3 %>%
   saveRDS(file = "cloud data/sms spam/2018-02-18 16_07_54 CEST model3.rds")
 smsDT %>% colnames %>% setdiff("Label") %>%
   saveRDS(file = "cloud data/sms spam/2018-02-18 16_07_54 CEST props3.rds")
+
+# smsSpam[preds3[, Label] == "spam", Text] %>% smsHamSpamDT(model, props) %>% View
