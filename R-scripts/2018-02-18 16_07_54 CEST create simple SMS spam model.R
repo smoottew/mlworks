@@ -117,7 +117,9 @@ ggplot(data = smsSpam, aes(x = TextLen, fill = Label)) +
 library(caret)
 set.seed(12345)
 
-indexes <- createDataPartition(smsSpam[, Label], times = 1, p = 0.7, list = FALSE)
+indexes <- createDataPartition(
+  smsSpam[, Label],
+  times = 1, p = 0.7, list = FALSE)
 
 trainData <- smsSpam[ indexes] %>% chDT
 testData  <- smsSpam[-indexes] %>% chDT
@@ -213,7 +215,10 @@ trainDT %>% moveDTcols("Label", "first")
 #
 set.seed(12345)
 cvFolds <- createMultiFolds(trainData[, Label], k = 10, times = 3)
-cvCntrl <- trainControl(method = "repeatedcv", number = 10, repeats = 3, index = cvFolds)
+cvCntrl <- trainControl(method = "repeatedcv",
+                        number = 10,
+                        repeats = 3,
+                        index = cvFolds)
 
 library(doSNOW)
 
